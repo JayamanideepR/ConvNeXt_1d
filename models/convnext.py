@@ -68,6 +68,14 @@ class ConvNeXt(nn.Module):
                  layer_scale_init_value=1e-6, head_init_scale=1.,
                  ):
         super().__init__()
+        
+        self.in_chans = in_chans
+        self.num_classes = num_classes
+        self.depths = depths
+        self.dims = dims
+        self.drop_path_rate = drop_path_rate
+        self.layer_scale_init_value = layer_scale_init_value
+        self.head_init_scale = head_init_scale
 
         self.downsample_layers = nn.ModuleList() # stem and 3 intermediate downsampling conv layers
         stem = nn.Sequential(
@@ -115,6 +123,15 @@ class ConvNeXt(nn.Module):
         x = self.forward_features(x)
         x = self.head(x)
         return x
+    
+    def params_to_be_saved(self):
+        return {'in_chans':self.in_chans,
+        'num_classes':self.num_classes,
+        'depths':self.depths,
+        'dims':self.dims,
+        'drop_path_rate':self.drop_path_rate,
+        'layer_scale_init_value':self.layer_scale_init_value,
+        'head_init_scale':self.head_init_scale}
 
 class LayerNorm(nn.Module):
     r""" LayerNorm that supports two data formats: channels_last (default) or channels_first. 
@@ -152,7 +169,7 @@ model_urls = {
 }
 
 @register_model
-def convnext_tiny(pretrained=False,in_22k=False, **kwargs):
+def convnext_1d_tiny(pretrained=False,in_22k=False, **kwargs):
     model = ConvNeXt(depths=[3, 3, 9, 3], dims=[96, 192, 384, 768], **kwargs)
     if pretrained:
         url = model_urls['convnext_tiny_22k'] if in_22k else model_urls['convnext_tiny_1k']
@@ -161,7 +178,7 @@ def convnext_tiny(pretrained=False,in_22k=False, **kwargs):
     return model
 
 @register_model
-def convnext_small(pretrained=False,in_22k=False, **kwargs):
+def convnext_1d_small(pretrained=False,in_22k=False, **kwargs):
     model = ConvNeXt(depths=[3, 3, 27, 3], dims=[96, 192, 384, 768], **kwargs)
     if pretrained:
         url = model_urls['convnext_small_22k'] if in_22k else model_urls['convnext_small_1k']
@@ -170,7 +187,7 @@ def convnext_small(pretrained=False,in_22k=False, **kwargs):
     return model
 
 @register_model
-def convnext_base(pretrained=False, in_22k=False, **kwargs):
+def convnext_1d_base(pretrained=False, in_22k=False, **kwargs):
     model = ConvNeXt(depths=[3, 3, 27, 3], dims=[128, 256, 512, 1024], **kwargs)
     if pretrained:
         url = model_urls['convnext_base_22k'] if in_22k else model_urls['convnext_base_1k']
@@ -179,7 +196,7 @@ def convnext_base(pretrained=False, in_22k=False, **kwargs):
     return model
 
 @register_model
-def convnext_large(pretrained=False, in_22k=False, **kwargs):
+def convnext_1d_large(pretrained=False, in_22k=False, **kwargs):
     model = ConvNeXt(depths=[3, 3, 27, 3], dims=[192, 384, 768, 1536], **kwargs)
     if pretrained:
         url = model_urls['convnext_large_22k'] if in_22k else model_urls['convnext_large_1k']
@@ -188,7 +205,7 @@ def convnext_large(pretrained=False, in_22k=False, **kwargs):
     return model
 
 @register_model
-def convnext_xlarge(pretrained=False, in_22k=False, **kwargs):
+def convnext_1d_xlarge(pretrained=False, in_22k=False, **kwargs):
     model = ConvNeXt(depths=[3, 3, 27, 3], dims=[256, 512, 1024, 2048], **kwargs)
     if pretrained:
         assert in_22k, "only ImageNet-22K pre-trained ConvNeXt-XL is available; please set in_22k=True"

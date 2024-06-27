@@ -18,7 +18,8 @@ from pathlib import Path
 
 import torch
 import torch.distributed as dist
-from torch._six import inf
+from torch import inf
+from torch.optim.lr_scheduler import _LRScheduler
 
 from tensorboardX import SummaryWriter
 
@@ -505,3 +506,55 @@ def auto_load_model(args, model, model_without_ddp, optimizer, loss_scaler, mode
             if 'scaler' in checkpoint:
                 loss_scaler.load_state_dict(checkpoint['scaler'])
             print("With optim & sched!")
+
+class CustomScheduler(_LRScheduler):
+    def __init__(self, optimizer,effective_batch_size,lr_schedule_values=None, wd_schedule_values=None, update_freq=1):
+        self.lr_schedule_values = lr_schedule_values
+        self.wd_schedule_values = wd_schedule_values
+        self.update_freq = update_freq
+        self.effective_batch_size = effective_batch_size
+        self.data_it = 0
+        self.it = self.data_it//self.effective_batch_size
+        super(CustomScheduler, self).__init__(optimizer, last_epoch=-1)
+    
+    def get_lr(self):
+        return [group['lr'] for group in self.optimizer.param_groups]
+    
+    def get_wd(self):
+        return [group['weight_decay'] for group in self.optimizer.param_groups]
+    
+    def step(self, epoch=None):
+        
+        self.it = self.data_it//self.effective_batch_size
+        
+        # Update parameters based on the current iteration
+        if self.data_it % self.update_freq == 0:
+            for param_group in self.optimizer.param_groups:
+                if self.lr_schedule_values is not None:
+                    param_group["lr"] = self.lr_schedule_values[self.it] * param_group.get("lr_scale", 1.0)
+                if self.wd_schedule_values is not None and param_group.get("weight_decay", 0) > 0:
+                    param_group["weight_decay"] = self.wd_schedule_values[self.it]
+        
+        self.data_it += 1
+
+class CustomOptimizerWrapper(torch.optim.Optimizer):
+    def __init__(self, optimizer, update_freq=1):
+        self.optimizer = optimizer
+        self.update_freq = update_freq
+        self.it = 0
+        self.param_groups = self.optimizer.param_groups
+    
+    def step(self, closure=None):
+        if self.it % self.update_freq == 0:
+            self.optimizer.step()
+        self.it += 1
+    
+    def zero_grad(self):
+        if self.it % self.update_freq == 0:
+            self.optimizer.zero_grad()
+    
+    def state_dict(self):
+        return self.optimizer.state_dict()
+    
+    def load_state_dict(self, state_dict):
+        self.optimizer.load_state_dict(state_dict)
