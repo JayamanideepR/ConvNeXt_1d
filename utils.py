@@ -508,13 +508,11 @@ def auto_load_model(args, model, model_without_ddp, optimizer, loss_scaler, mode
             print("With optim & sched!")
 
 class CustomScheduler(_LRScheduler):
-    def __init__(self, optimizer,effective_batch_size,lr_schedule_values=None, wd_schedule_values=None, update_freq=1):
+    def __init__(self, optimizer,lr_schedule_values=None, wd_schedule_values=None, update_freq=1):
         self.lr_schedule_values = lr_schedule_values
         self.wd_schedule_values = wd_schedule_values
         self.update_freq = update_freq
-        self.effective_batch_size = effective_batch_size
         self.data_it = 0
-        self.it = self.data_it//self.effective_batch_size
         super(CustomScheduler, self).__init__(optimizer, last_epoch=-1)
     
     def get_lr(self):
@@ -525,16 +523,15 @@ class CustomScheduler(_LRScheduler):
     
     def step(self, epoch=None):
         
-        self.it = self.data_it//self.effective_batch_size
+        self.it = self.data_it
         
         # Update parameters based on the current iteration
-        if self.data_it % self.update_freq == 0:
-            for param_group in self.optimizer.param_groups:
-                if self.lr_schedule_values is not None:
-                    param_group["lr"] = self.lr_schedule_values[self.it] * param_group.get("lr_scale", 1.0)
-                if self.wd_schedule_values is not None and param_group.get("weight_decay", 0) > 0:
-                    param_group["weight_decay"] = self.wd_schedule_values[self.it]
-        
+        for param_group in self.optimizer.param_groups:
+            if self.lr_schedule_values is not None:
+                param_group["lr"] = self.lr_schedule_values[self.it] * param_group.get("lr_scale", 1.0)
+            if self.wd_schedule_values is not None and param_group.get("weight_decay", 0) > 0:
+                param_group["weight_decay"] = self.wd_schedule_values[self.it]
+    
         self.data_it += 1
 
 class CustomOptimizerWrapper(torch.optim.Optimizer):
