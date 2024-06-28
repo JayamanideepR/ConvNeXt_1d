@@ -31,6 +31,7 @@ from utils import NativeScalerWithGradNormCount as NativeScaler
 import utils
 import models.convnext
 import models.convnext_isotropic
+from datasets import LINKS_curs_dataset,get_dataset_save_splits
 
 def str2bool(v):
     """
@@ -198,6 +199,7 @@ def get_args_parser():
                         help="The name of the W&B project where you're sending the new run.")
     parser.add_argument('--wandb_ckpt', type=str2bool, default=False,
                         help="Save model checkpoints as W&B Artifacts.")
+    parser.add_argument('--model_inputs',type=str,default="coords",help='Input data to the model, options: embeds, coords')
 
     return parser
 
@@ -211,7 +213,24 @@ def main(args):
     torch.manual_seed(seed)
     np.random.seed(seed)
     cudnn.benchmark = True
-
+    
+    data_folder = os.path.join("data")
+    bn_data_path = os.path.join(data_folder,"bn_data_stats_0.005.pt")
+    samp_curves_path = os.path.join(data_folder,"samp_curves.pt")
+    samp_embeds_path = os.path.join(data_folder,"samp_embeddings.pt")
+    dataset_split_pkl_path = os.path.join("dataset_splits.pkl")
+    
+    if args.model_inputs == "coords":
+        samp_data_path = samp_curves_path
+        point_dimension = 2
+    elif args.model_inputs == "embeds":
+        samp_data_path = samp_embeds_path
+        point_dimension = 1
+    generator1 = torch.Generator().manual_seed(args.seed_val)
+    props = [0.8, 0.1,0.1]
+    all_dataset,train_dataset,test_dataset,val_dataset = get_dataset_save_splits(LINKS_curs_dataset,samp_data_path,bn_data_path,dataset_split_pkl_path,generator1,props=props)
+    num_classes = all_dataset.max_num_bodies - all_dataset.min_num_bodies + 1
+    
     dataset_train, args.nb_classes = build_dataset(is_train=True, args=args)
     if args.disable_eval:
         args.dist_eval = False

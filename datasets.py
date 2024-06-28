@@ -8,10 +8,60 @@
 
 import os
 from torchvision import datasets, transforms
-
+import torch
 from timm.data.constants import \
     IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.data import create_transform
+from torch.utils.data import Dataset,random_split,Subset
+import pickle
+
+class LINKS_curs_dataset(Dataset):
+    """Dataset of curated links"""
+    
+    def __init__(self,input_data_path: str,bn_data_path: str):
+        
+        ## saving path details and loading data
+        
+        self.input_data_path = input_data_path
+        self.bn_data_path = bn_data_path
+        self.input_data = torch.load(self.input_data_path)
+        self.input_data = self.input_data.permute(0,2,1)
+        self.bn_data = torch.load(bn_data_path)
+        self.num_bodies_data = (self.bn_data[:,102]).long()
+        
+        self.max_num_bodies = self.num_bodies_data.max() 
+        self.min_num_bodies = self.num_bodies_data.min()
+        self.unique_num_bodies = self.num_bodies_data.unique() 
+        self.count_to_label = {val.item(): idx for (idx,val) in enumerate(self.unique_num_bodies)}
+        self.label_to_count = {value:key for (key,value) in self.count_to_label.items()}
+        self.num_bodies_labels = torch.tensor([self.count_to_label[val.item()] for val in self.num_bodies_data])
+        print(f"There are {self.num_bodies_labels.shape[0]} data points")
+    
+    def __len__(self):
+        return self.num_bodies_labels.shape[0]
+    
+    def __getitem__(self, idx):
+        return self.input_data[idx,...],self.num_bodies_labels[idx]
+
+
+def get_dataset_save_splits(dataset_class,input_data_path:str,bn_data_path:str,split_pkl_path:str,rng:torch._C.Generator,props:list=[0.8,0.1,0.1]):
+    
+    all_dataset = dataset_class(input_data_path,bn_data_path)
+    nums = [int(all_dataset.__len__()*val) for val in props]
+    train_dataset,test_dataset,val_dataset = random_split(all_dataset,props, generator=rng)
+    
+    # saving the indices
+    with open(split_pkl_path,'wb') as f:
+        idx_dict = {
+            'input_data_path':input_data_path,
+            'bn_data_path':bn_data_path,
+            'train':train_dataset.indices,
+            'val':val_dataset.indices,
+            'test':test_dataset.indices
+        }
+        pickle.dump(idx_dict,f)
+    
+    return all_dataset,train_dataset,test_dataset,val_dataset
 
 def build_dataset(is_train, args):
     transform = build_transform(is_train, args)
@@ -40,6 +90,8 @@ def build_dataset(is_train, args):
         dataset = datasets.ImageFolder(root, transform=transform)
         nb_classes = args.nb_classes
         assert len(dataset.class_to_idx) == nb_classes
+    elif args.data_set == "link_data":
+        
     else:
         raise NotImplementedError()
     print("Number of the class = %d" % nb_classes)
